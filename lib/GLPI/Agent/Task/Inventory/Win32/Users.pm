@@ -66,7 +66,7 @@ sub doInventory {
             # FORCE: login@company.org
             my $login = $lastLoggedUser->{LOGIN};
             $lastLoggedUser->{LOGIN}  = "$login\@company.org";
-            $lastLoggedUser->{DOMAIN} = 'company.org';
+            $lastLoggedUser->{DOMAIN} = 'calstart.local';
 
             # Duplicate key uses the final LOGIN value
             $fullname = $fullname ? lc($fullname) : lc($lastLoggedUser->{LOGIN});
@@ -100,7 +100,7 @@ sub doInventory {
         # FORCE: login@company.org
         my $login = $user->{LOGIN};
         $user->{LOGIN}  = "$login\@company.org";
-        $user->{DOMAIN} = 'company.org';
+        $user->{DOMAIN} = 'calstart.local';
 
         my $fullname = lc($user->{LOGIN});
 
