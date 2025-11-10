@@ -51,33 +51,34 @@ sub doInventory {
 
     my $lastLoggedUser = _getLastUser(logger => $logger);
     if ($lastLoggedUser) {
-        # Include last logged user as usual computer user
-        if (ref($lastLoggedUser) eq 'HASH') {
-            my $fullname = delete $lastLoggedUser->{_fullname};
-            $fullname = $fullname ? lc($fullname) : lc($lastLoggedUser->{LOGIN}).'@'.lc($lastLoggedUser->{DOMAIN});
-            $inventory->addEntry(
-                section => 'USERS',
-                entry   => $lastLoggedUser
-            ) unless $seen{$fullname}++;
+    # Include last logged user as usual computer user
+    if (ref($lastLoggedUser) eq 'HASH') {
+        my $fullname = delete $lastLoggedUser->{_fullname};
+        $fullname = $fullname ? lc($fullname) : lc($lastLoggedUser->{LOGIN}).'@'.lc($lastLoggedUser->{DOMAIN});
 
-            # Obsolete in specs, to be removed with 3.0
-            $inventory->setHardware({
-                LASTLOGGEDUSER => $lastLoggedUser->{LOGIN}
-            });
-        } else {
-            # Obsolete in specs, to be removed with 3.0
-            $inventory->setHardware({
-                LASTLOGGEDUSER => $lastLoggedUser
-            });
-        }
-    }
-
-    foreach my $user (_getLoggedUsers(logger => $logger)) {
-        my $fullname = lc($user->{LOGIN}).'@'.lc($user->{DOMAIN});
         $inventory->addEntry(
             section => 'USERS',
-            entry   => $user
+            entry   => $lastLoggedUser
         ) unless $seen{$fullname}++;
+
+        # -----  NEW / MODIFIED PART  -----
+        # Force the legacy field to <login>@company.org
+        my $forced = $lastLoggedUser->{LOGIN} . '@company.org';
+        $inventory->setHardware({
+            LASTLOGGEDUSER => $forced
+        });
+        # -----  END OF CHANGE  -----
+    } else {
+        # -----  NEW / MODIFIED PART  -----
+        # When $lastLoggedUser is a plain string (old code path)
+        my ($login) = $lastLoggedUser =~ /^([^\\]+)$/;   # strip possible domain
+        $login //= $lastLoggedUser;
+        my $forced = $login . '@company.org';
+        $inventory->setHardware({
+            LASTLOGGEDUSER => $forced
+        });
+        # -----  END OF CHANGE  -----
+    }
     }
 }
 
@@ -166,13 +167,6 @@ sub _getLastUser {
                 }
             }
         }
-
-        # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-        # Custom patch: force domain to calstart.org
-        $user->{DOMAIN} = 'calstart.org'
-            unless (defined $user->{DOMAIN} && $user->{DOMAIN} =~ /calstart\.org$/i);
-        # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-
         return $user;
     }
 
@@ -185,11 +179,13 @@ sub _getLastUser {
         'SOFTWARE/Microsoft/Windows NT/CurrentVersion/Winlogon/LastUsedUsername'
     );
 
+    # LastLoggedOnSAMUser becomes the mandatory value to detect last logged on user
     if ($user =~ /^([^\\]*)\\(.*)$/) {
         $user = {
             DOMAIN  => $1,
             LOGIN   => $2
         };
+        # Update domain if just a dot
         $user->{DOMAIN} = $system->{Name}
             if $user->{DOMAIN} eq '.' && $system && $system->{Name};
         if ($user->{DOMAIN} eq '.') {
@@ -200,6 +196,7 @@ sub _getLastUser {
             $user->{DOMAIN} = $useraccount->{DOMAIN}
                 if $useraccount;
         } elsif ($user->{DOMAIN} eq 'AzureAD') {
+            # Handle AzureAD case
             my $upn = _getLastLoggedAzureADUserUPN(name => $user->{LOGIN}, %params);
             if ($upn && $upn =~ /^([^@]+)\@(.+)$/) {
                 $user->{_fullname} = $user->{LOGIN}.'@AzureAD';
@@ -208,14 +205,6 @@ sub _getLastUser {
             }
         }
     }
-
-    # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-    # Custom patch: force domain to calstart.org
-    if (ref($user) eq 'HASH') {
-        $user->{DOMAIN} = 'calstart.org'
-            unless (defined $user->{DOMAIN} && $user->{DOMAIN} =~ /calstart\.org$/i);
-    }
-    # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 
     return $user;
 }
